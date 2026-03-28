@@ -6,7 +6,7 @@ prompt
 chroma_db/
 rag/*
 .undo_history/*
-
+.agent/
 # Arquivos específicos do usuário
 import_conversas_campeao.py
 sync_conversas_campeas.py

@@ -1,17 +1,11 @@
-# main.py
-from utils import spinner, typewriter, get_input, title
-title("lyre")
 import sys
 import os
 import subprocess
-from agent import Agent, Planner
-from tools import execute, undo
-from rag import handle_rag_command, ensure_rag
-import json
 import threading
 import time
 
-print("\x1b[31m" + """
+# 1. Impressão do Banner imediata
+print("\x1b[31m" + r"""
                           ___       ___           ___           ___     
                          /\__\     |\__\         /\  \         /\  \    
                         /:/  /     |:|  |       /::\  \       /::\  \   
@@ -25,6 +19,61 @@ print("\x1b[31m" + """
                         \:\__\                  |:|  |        \:\__\    
                          \/__/                   \|__|         \/__/    
 """ + "\x1b[0m")
+
+# 2. Verificação de dependências
+def check_dependencies():
+    import importlib.util
+    
+    missing = []
+    # Mapeamento de nome no requirements.txt para nome do módulo importado (se diferente)
+    packages = {
+        "openai": "openai",
+        "sentence-transformers": "sentence_transformers",
+        "chromadb": "chromadb",
+        "prompt_toolkit": "prompt_toolkit"
+    }
+    
+    if not os.path.exists("requirements.txt"):
+        return
+        
+    with open("requirements.txt", "r") as f:
+        for line in f:
+            pkg = line.strip().split("==")[0].split(">=")[0]
+            if not pkg or pkg.startswith("#"): continue
+            
+            module_name = packages.get(pkg, pkg.replace("-", "_"))
+            if importlib.util.find_spec(module_name) is None:
+                missing.append(pkg)
+                
+    if missing:
+        choice = input("Verifiquei e vi que você não instalou as dependências necessárias. Posso instalar por você? (y/n): ").lower()
+        if choice == 'y':
+            from utils import spinner
+            print("Installing using 'python3 -m pip install -r requirements.txt'")
+            
+            stop_event = threading.Event()
+            spinner_thread = threading.Thread(target=spinner, args=(stop_event, "Installing..."))
+            spinner_thread.start()
+            
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "--break-system-packages"], 
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            finally:
+                stop_event.set()
+                spinner_thread.join()
+                print("✓ Dependências instaladas com sucesso!\n")
+        else:
+            sys.exit(0)
+
+check_dependencies()
+
+# 3. Imports pesados e inicialização
+from utils import spinner, typewriter, get_input, title
+title("lyre")
+from agent import Agent, Planner
+from tools import execute, undo
+from rag import handle_rag_command, ensure_rag
+import json
 
 print("Comandos disponíveis:")
 print("  /help      - Ver ajuda e exemplos")

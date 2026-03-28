@@ -1,10 +1,7 @@
 # utils.py
 import sys
 import time
-from prompt_toolkit import PromptSession
-from prompt_toolkit.completion import Completer, Completion
-from prompt_toolkit.styles import Style
-from prompt_toolkit.formatted_text import HTML
+
 
 def title(name):
     """Define o título da janela do terminal"""
@@ -28,16 +25,16 @@ def rag_spinner(stop_event):
     sys.stdout.write("\r" + " " * 30 + "\r")
     sys.stdout.flush()
 
-def spinner(stop_event):
-    """Spinner para thinking"""
+def spinner(stop_event, message="Thinking..."):
+    """Spinner genérico"""
     frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
     idx = 0
     while not stop_event.is_set():
-        sys.stdout.write(f"\r{frames[idx]} Thinking...")
+        sys.stdout.write(f"\r{frames[idx]} {message}")
         sys.stdout.flush()
         idx = (idx + 1) % len(frames)
         time.sleep(0.07)
-    sys.stdout.write("\r" + " " * 30 + "\r")
+    sys.stdout.write("\r" + " " * (len(message) + 10) + "\r")
     sys.stdout.flush()
 
 def typewriter(text, delay=0.01):
@@ -51,36 +48,46 @@ def typewriter(text, delay=0.01):
 
 
 # Autocomplete
-class CommandCompleter(Completer):
-    def __init__(self):
-        self.commands = [
-            '/quit',
-            '/help',
-            '/model',
-            '/rag', '/rag enable', '/rag disable', '/rag status',
-            '/rag add', '/rag view', '/rag clear', '/rag help',
-            '/undo'
-        ]
-    
-    def get_completions(self, document, complete_event):
-        text = document.text_before_cursor
-        for cmd in self.commands:
-            if cmd.startswith(text) and cmd != text:
-                yield Completion(cmd, start_position=-len(text))
-
-_autocomplete_style = Style.from_dict({
-    'prompt': '#ff0000',  # Vermelho
-    'completion-menu.completion': 'bg:#3a3a3a #ffffff',  # Cinza escuro com texto branco
-    'completion-menu.completion.current': 'bg:#5f87ff #000000',  # Azul quando selecionado
-})
-
-_completer = CommandCompleter()
+_autocomplete_cache = {}
 
 def get_input(prompt_text='> '):
     """Input com autocomplete de comandos"""
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.completion import Completer, Completion
+    from prompt_toolkit.styles import Style
+    from prompt_toolkit.formatted_text import HTML
+
+    if '_completer' not in _autocomplete_cache:
+        class CommandCompleter(Completer):
+            def __init__(self):
+                self.commands = [
+                    '/quit',
+                    '/help',
+                    '/model',
+                    '/rag', '/rag enable', '/rag disable', '/rag status',
+                    '/rag add', '/rag view', '/rag clear', '/rag help',
+                    '/undo'
+                ]
+            
+            def get_completions(self, document, complete_event):
+                text = document.text_before_cursor
+                for cmd in self.commands:
+                    if cmd.startswith(text) and cmd != text:
+                        yield Completion(cmd, start_position=-len(text))
+
+        _autocomplete_cache['_style'] = Style.from_dict({
+            'prompt': '#ff0000',  # Vermelho
+            'completion-menu.completion': 'bg:#3a3a3a #ffffff',  # Cinza escuro com texto branco
+            'completion-menu.completion.current': 'bg:#5f87ff #000000',  # Azul quando selecionado
+        })
+        _autocomplete_cache['_completer'] = CommandCompleter()
+
+    completer = _autocomplete_cache['_completer']
+    style = _autocomplete_cache['_style']
+
     session = PromptSession(
-        completer=_completer,
-        style=_autocomplete_style,
+        completer=completer,
+        style=style,
         complete_while_typing=True
     )
     user_input = session.prompt(HTML(f'<prompt>{prompt_text}</prompt>'))
@@ -88,7 +95,7 @@ def get_input(prompt_text='> '):
     # Auto-completar se comando incompleto
     if user_input and not user_input.endswith(' '):
         # Buscar matches exatos primeiro (comandos base)
-        exact_matches = [cmd for cmd in _completer.commands 
+        exact_matches = [cmd for cmd in completer.commands 
                         if cmd.startswith(user_input) 
                         and cmd != user_input
                         and ' ' not in cmd[len(user_input):]]
@@ -97,7 +104,7 @@ def get_input(prompt_text='> '):
             return exact_matches[0]
         
         # Se não houver match exato único, buscar qualquer match único
-        all_matches = [cmd for cmd in _completer.commands 
+        all_matches = [cmd for cmd in completer.commands 
                       if cmd.startswith(user_input) and cmd != user_input]
         
         if len(all_matches) == 1:
